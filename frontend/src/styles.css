@@ -1,0 +1,399 @@
+:root {
+  /* HEX Codes for Colors */
+  --primary-color: #8b5cf6;
+  --primary-hover: #7c3aed;
+  --success-color: #14b8a6;
+  --success-hover: #0d9488;
+  --danger-color: #f43f5e;
+  --danger-hover: #e11d48;
+
+  --bg-dark: #0f172a;
+  --bg-gradient-start: #2e1065;
+
+  --text-main: #f8fafc;
+  --text-muted: #cbd5e1;
+
+  --glass-bg: #0f172a99;
+  --glass-border: #ffffff26;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* 9. Animations with Transforms */
+@keyframes popIn {
+  0% {
+    transform: scale(0.95) translate(0, 10px);
+  }
+
+  100% {
+    transform: scale(1) translate(0, 0);
+  }
+}
+
+@keyframes bounceSuccess {
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.1) translate(0, -2px);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes shakeDanger {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+
+  25% {
+    transform: translate(-2px, 0) rotate(-2deg);
+  }
+
+  50% {
+    transform: translate(2px, 0) rotate(2deg);
+  }
+
+  75% {
+    transform: translate(-2px, 0) rotate(-2deg);
+  }
+
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+}
+
+/* 3. Flexbox & 8. Background Properties */
+body {
+  font-family: 'Inter', sans-serif;
+  background-image: linear-gradient(#2e1065, #0f172a);
+  color: #f8fafc;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Glassmorphism Utilities */
+.glass-panel {
+  background-color: #0f172a99;
+  border: 1px solid #ffffff26;
+  animation: popIn 0.6s forwards;
+}
+
+/* Typography & Layout */
+h2,
+h3 {
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+p {
+  color: #cbd5e1;
+}
+
+.w-full {
+  width: 100%;
+}
+
+
+/* Buttons & Transitions */
+button {
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  transition: transform 0.3s;
+  color: #ffffff;
+}
+
+.btn-primary {
+  background-image: linear-gradient(#8b5cf6, #7c3aed);
+}
+
+.btn-primary:hover {
+  transform: translate(0, -2px);
+}
+
+.btn-primary:active {
+  transform: translate(0, 2px);
+}
+
+.btn-success {
+  background-image: linear-gradient(#14b8a6, #0d9488);
+}
+
+.btn-success:hover {
+  transform: translate(0, -2px) scale(1.02);
+}
+
+.btn-success:active {
+  animation: bounceSuccess 0.4s ease-in-out;
+  transform: scale(0.95);
+}
+
+.btn-danger {
+  background-image: linear-gradient(#f43f5e, #e11d48);
+}
+
+.btn-danger:hover {
+  transform: translate(0, -2px) scale(1.02);
+}
+
+.btn-danger:active {
+  animation: shakeDanger 0.4s ease-in-out;
+  transform: scale(0.95);
+}
+
+.btn-logout {
+  background-color: transparent;
+  border: 1px solid #f43f5e;
+  color: #f43f5e;
+  padding: 0.4rem 1rem;
+  transition: transform 0.3s;
+}
+
+.btn-logout:hover {
+  background-color: #f43f5e;
+  color: #ffffff;
+  transform: scale(1.05);
+}
+
+.nav-btn {
+  background-color: transparent;
+  color: #cbd5e1;
+  width: 100%;
+  text-align: left;
+  margin-bottom: 0.5rem;
+  transition: transform 0.3s;
+}
+
+.nav-btn:hover,
+.nav-btn.active {
+  background-color: #ffffff1a;
+  color: #f8fafc;
+  transform: translate(5px, 0);
+}
+
+/* 4. Box Model & Sizing for Inputs */
+input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid #ffffff26;
+  background-color: #00000033;
+  color: #f8fafc;
+  font-family: 'Inter', sans-serif;
+}
+
+input:focus {
+  border: 1px solid #8b5cf6;
+}
+
+.input-group {
+  margin-bottom: 1.25rem;
+  text-align: left;
+}
+
+/* 5. CSS Selectors (Combinators) */
+.input-group>label {
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  color: #cbd5e1;
+}
+
+/* Login Component with Flexbox */
+.login-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 400px;
+  padding: 2.5rem;
+  text-align: center;
+}
+
+.logo-placeholder {
+  width: 64px;
+  height: 64px;
+  background-image: linear-gradient(#8b5cf6, #14b8a6);
+  /* 11. Spacing & Layout Utilities (auto margin) */
+  margin: 0 auto 1.5rem auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.error-message {
+  color: #fca5a5;
+  background-color: #dc262633;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+}
+
+.role-selector {
+  display: flex;
+  background-color: #00000033;
+  padding: 4px;
+  margin-bottom: 1.5rem;
+}
+
+.role-btn {
+  flex-grow: 1;
+  padding: 0.5rem;
+  font-size: 0.875rem;
+  background-color: transparent;
+  color: #cbd5e1;
+}
+
+.role-btn.active {
+  background-color: #8b5cf6;
+  color: #ffffff;
+}
+
+.auth-switch {
+  margin-top: 1.5rem;
+  font-size: 0.875rem;
+}
+
+.btn-text {
+  background-color: transparent;
+  border: none;
+  color: #8b5cf6;
+  padding: 0;
+  margin-left: 0.5rem;
+  font-weight: 600;
+}
+
+.btn-text:hover {
+  text-decoration: underline;
+  background-color: transparent;
+}
+
+/* Dashboard Layout */
+.dashboard-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+}
+
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 2rem;
+  margin-bottom: 1rem;
+}
+
+.nav-brand {
+  font-weight: 700;
+  font-size: 1.25rem;
+  color: #a5b4fc;
+}
+
+.nav-user {
+  display: flex;
+  align-items: center;
+}
+
+/* 2. CSS Grid & 12. Combining Layout Systems */
+.dashboard-content {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 1rem;
+  flex-grow: 1;
+}
+
+.sidebar {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.main-panel {
+  padding: 1.5rem;
+  overflow: visible;
+}
+
+/* Tables */
+.table-container {
+  overflow: visible;
+  margin-top: 1rem;
+}
+
+.data-table {
+  width: 100%;
+}
+
+.data-table th,
+.data-table td {
+  padding: 1rem;
+  text-align: left;
+  border-bottom: 1px solid #ffffff26;
+}
+
+.data-table th {
+  color: #cbd5e1;
+  font-weight: 500;
+}
+
+.data-table tr {
+  transition: transform 0.2s;
+}
+
+.data-table tr:hover {
+  background-color: #ffffff0d;
+  transform: scale(1.01);
+}
+
+/* Badges */
+.status-badge {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.status-badge.present {
+  background-color: #10b98133;
+  color: #34d399;
+}
+
+.status-badge.absent {
+  background-color: #ef444433;
+  color: #f87171;
+}
+
+/* 10. Responsive Design & Media Queries */
+@media (max-width: 768px) {
+  .dashboard-content {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    width: 100%;
+  }
+}
+
+/* AttendanceStats: remove horizontal dividing lines in Mark Attendance view */
+.attendance-stats .data-table th,
+.attendance-stats .data-table td {
+  border-bottom: none;
+}
+
+/* AttendanceStats: prevent scroll / overflow inside mark-attendance */
+.attendance-stats .table-container {
+  overflow: visible;
+  max-height: none;
+}
