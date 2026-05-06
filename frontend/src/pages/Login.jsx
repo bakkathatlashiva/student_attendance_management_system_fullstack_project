@@ -13,6 +13,7 @@ export default function Login() {
   
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
+  const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
   const handleAuth = async (e) => {
     e.preventDefault();
@@ -23,7 +24,7 @@ export default function Login() {
         ? { email, password, role } 
         : { name, email, password, role };
 
-      const res = await fetch(`http://localhost:5000/auth/${endpoint}`, {
+      const res = await fetch(`${API_BASE}/auth/${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)

@@ -21,3 +21,10 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Local build output
+/frontend/dist/
+
+# Local SQLite DB files
+/backend/attendance.db
+/attendance.db

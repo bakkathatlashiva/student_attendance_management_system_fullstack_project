@@ -21,6 +21,7 @@ export default function FacultyDashboard() {
 
   const { token, user, logout } = useContext(AuthContext);
   const navigate = useNavigate();
+  const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
   useEffect(() => {
     fetchRecords();
@@ -31,8 +32,8 @@ export default function FacultyDashboard() {
   const fetchRecords = async () => {
     try {
       const url = filterDate 
-        ? `http://localhost:5000/attendance/all?date=${filterDate}` 
-        : `http://localhost:5000/attendance/all`;
+        ? `${API_BASE}/attendance/all?date=${filterDate}` 
+        : `${API_BASE}/attendance/all`;
       const res = await fetch(url, { headers: { Authorization: token } });
       if (res.ok) setRecords(await res.json());
     } catch (err) {
@@ -43,8 +44,8 @@ export default function FacultyDashboard() {
   const fetchAbsentees = async () => {
     try {
       const url = filterDate 
-        ? `http://localhost:5000/attendance/absentees?date=${filterDate}` 
-        : `http://localhost:5000/attendance/absentees`;
+        ? `${API_BASE}/attendance/absentees?date=${filterDate}` 
+        : `${API_BASE}/attendance/absentees`;
       const res = await fetch(url, { headers: { Authorization: token } });
       if (res.ok) setAbsentees(await res.json());
     } catch (err) {
@@ -54,7 +55,7 @@ export default function FacultyDashboard() {
 
   const fetchStudents = async () => {
     try {
-      const res = await fetch("http://localhost:5000/attendance/students", {
+      const res = await fetch(`${API_BASE}/attendance/students`, {
         headers: { Authorization: token }
       });
       if (res.ok) setStudents(await res.json());
@@ -66,7 +67,7 @@ export default function FacultyDashboard() {
   const markAttendance = async (student_id, status) => {
     if (!markDate) return alert("Please select a date first.");
     try {
-      const res = await fetch("http://localhost:5000/attendance/mark", {
+      const res = await fetch(`${API_BASE}/attendance/mark`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: token },
         body: JSON.stringify({ student_id, status, date: markDate })
@@ -86,7 +87,7 @@ export default function FacultyDashboard() {
     const student_id = e.target.student_id.value;
     const password = "password"; // Default password for newly added students
     try {
-      const res = await fetch("http://localhost:5000/auth/signup", {
+      const res = await fetch(`${API_BASE}/auth/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, student_id, password, role: 'student' })
@@ -102,7 +103,7 @@ export default function FacultyDashboard() {
 
   const handleUpdateStudent = async (id) => {
     try {
-      const res = await fetch(`http://localhost:5000/students/${id}`, {
+      const res = await fetch(`${API_BASE}/students/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: token },
         body: JSON.stringify({ name: editName, student_id: editStudentId })
@@ -119,7 +120,7 @@ export default function FacultyDashboard() {
   const handleDeleteStudent = async (id) => {
     if(!window.confirm("Are you sure you want to delete this student and all their attendance records?")) return;
     try {
-      const res = await fetch(`http://localhost:5000/students/${id}`, {
+      const res = await fetch(`${API_BASE}/students/${id}`, {
         method: "DELETE",
         headers: { Authorization: token }
       });

@@ -1,7 +1,8 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
-const dbPath = path.resolve(__dirname, 'attendance.db');
+// Allow overriding the SQLite file path via env (useful for hosts with mounted volumes)
+const dbPath = process.env.DB_PATH ? path.resolve(process.env.DB_PATH) : path.resolve(__dirname, 'attendance.db');
 
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
