@@ -1,15 +1,24 @@
-const jwt = require("jsonwebtoken");
+const jwt = require('jsonwebtoken');
 
-const SECRET = "secretkey";
+const JWT_SECRET = process.env.JWT_SECRET || 'supersecretjwtkeyforstudentattendanceapp';
 
 module.exports = (req, res, next) => {
-  const token = req.headers["authorization"];
+  let token = req.headers['authorization'];
 
-  if (!token) return res.sendStatus(403);
+  if (!token) {
+    return res.status(401).json({ msg: 'No token, authorization denied' });
+  }
 
-  jwt.verify(token, SECRET, (err, decoded) => {
-    if (err) return res.sendStatus(403);
+  // Handle "Bearer <token>" formatting
+  if (token.startsWith('Bearer ')) {
+    token = token.slice(7, token.length).trimLeft();
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
     req.user = decoded;
     next();
-  });
+  } catch (err) {
+    res.status(401).json({ msg: 'Token is not valid' });
+  }
 };

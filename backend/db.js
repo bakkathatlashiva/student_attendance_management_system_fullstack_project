@@ -1,67 +1,56 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+require("dotenv").config();
+const mongoose = require("mongoose");
+const mockMongoose = require("./services/mockMongoose");
 
-// Allow overriding the SQLite file path via env (useful for hosts with mounted volumes)
-const dbPath = process.env.DB_PATH ? path.resolve(process.env.DB_PATH) : path.resolve(__dirname, 'attendance.db');
+// Enable the hybrid mock layer immediately
+mockMongoose.enableMockMode();
 
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error('Error opening database', err.message);
-  } else {
-    console.log('Connected to the SQLite database.');
-    
-    // Initialize tables
-    db.serialize(() => {
-      db.run(`CREATE TABLE IF NOT EXISTS students (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT,
-        student_id TEXT UNIQUE,
-        email TEXT UNIQUE,
-        password TEXT,
-        role TEXT DEFAULT 'student'
-      )`);
+const MONGODB_URI =
+  process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/attendance_db";
 
-      db.run(`CREATE TABLE IF NOT EXISTS attendance (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        student_id INTEGER,
-        date TEXT,
-        status TEXT,
-        FOREIGN KEY (student_id) REFERENCES students(id)
-      )`);
+console.log("Connecting to MongoDB (unless USE_SQLITE=true)...");
 
-      // Insert dummy data if empty
-      db.get("SELECT COUNT(*) as count FROM students", (err, row) => {
-        if (row && row.count === 0) {
-          db.run(`INSERT INTO students (name, student_id, email, password, role) VALUES ('Admin Faculty', NULL, 'faculty@gmail.com', 'password', 'faculty')`);
-          db.run(`INSERT INTO students (name, student_id, email, password, role) VALUES ('John Doe', 'S001', NULL, 'password', 'student')`);
-        }
-      });
+const USE_SQLITE =
+  String(process.env.USE_SQLITE || "").toLowerCase() === "true";
+
+if (USE_SQLITE) {
+  console.log("SQLite-only mode enabled; skipping MongoDB connection.");
+  const seedDatabase = require("./seed");
+  seedDatabase().catch((e) =>
+    console.error("Failed to auto-seed SQLite-backed mock DB:", e.message),
+  );
+} else {
+  mongoose
+    .connect(MONGODB_URI, {
+      serverSelectionTimeoutMS: 2000, // Fail fast if MongoDB is not running locally
+    })
+    .then(() => {
+      console.log("Connected to MongoDB successfully.");
+    })
+    .catch((err) => {
+      console.log(
+        "Mongoose connection failed. Operating in hybrid Mock In-Memory DB Mode.",
+      );
+      // Auto-seed in-memory collection arrays
+      const seedDatabase = require("./seed");
+      seedDatabase().catch((e) =>
+        console.error("Failed to auto-seed in-memory DB:", e.message),
+      );
     });
-  }
-});
+}
 
-// Wrapper to mimic mysql2's connection.query signature
 module.exports = {
-  query: (sql, params, callback) => {
-    if (typeof params === 'function') {
-      callback = params;
-      params = [];
-    }
-
-    const sqlUpper = sql.toUpperCase().trim();
-    const isSelect = sqlUpper.startsWith('SELECT');
-
-    if (isSelect) {
-      db.all(sql, params, (err, rows) => {
-        callback(err, rows);
+  connection: mongoose.connection,
+  close: (cb) => {
+    mongoose.connection
+      .close()
+      .then(() => {
+        console.log("MongoDB connection closed.");
+        if (cb) cb();
+      })
+      .catch((err) => {
+        console.error("Error closing MongoDB connection:", err.message);
+        if (cb) cb(err);
       });
-    } else {
-      db.run(sql, params, function(err) {
-        if (err) {
-          return callback(err, null);
-        }
-        callback(null, { insertId: this.lastID, affectedRows: this.changes });
-      });
-    }
-  }
+  },
 };

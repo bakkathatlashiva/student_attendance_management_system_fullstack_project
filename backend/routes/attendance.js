@@ -1,150 +1,241 @@
-const express = require("express");
-const db = require("../db");
-const auth = require("../middleware/authMiddleware");
+const express = require('express');
+const Attendance = require('../models/attendance');
+const Student = require('../models/student');
+const Settings = require('../models/settings');
+const auth = require('../middleware/authMiddleware');
+const AuditLog = require('../models/auditLog');
 
 const router = express.Router();
 
-// Faculty Routes Middleware
-const facultyOnly = (req, res, next) => {
-  if (req.user.role !== 'faculty') return res.status(403).json({ msg: "Access denied" });
+const authorizedRole = (req, res, next) => {
+  const allowed = ['superadmin', 'admin', 'hod', 'faculty', 'student'];
+  if (!allowed.includes(req.user.role)) {
+    return res.status(403).json({ msg: 'Access denied: Insufficient privileges' });
+  }
   next();
 };
 
-// Mark attendance (Faculty Only)
-router.post("/mark", auth, facultyOnly, (req, res) => {
-  const { student_id, status, date } = req.body;
+// Haversine formula to compute distance in meters
+function getDistanceInMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371e3; // metres
+  const φ1 = lat1 * Math.PI / 180;
+  const φ2 = lat2 * Math.PI / 180;
+  const Δφ = (lat2 - lat1) * Math.PI / 180;
+  const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ/2) * Math.sin(Δλ/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+  return R * c;
+}
+
+// GET /api/attendance - List attendance logs with filter options
+router.get('/', auth, async (req, res) => {
+  try {
+    const { date, studentId, subjectId, branch, section, year, status } = req.query;
+
+    const query = {};
+    if (date) query.date = date;
+    if (status) query.status = status;
+    if (studentId) query.studentId = studentId;
+    if (subjectId) query.subjectId = subjectId;
+
+    let studentFilter = {};
+    let filterByStudentFields = false;
+
+    if (branch) { studentFilter.branch = branch; filterByStudentFields = true; }
+    if (section) { studentFilter.section = section; filterByStudentFields = true; }
+    if (year) { studentFilter.year = year; filterByStudentFields = true; }
+
+    if (filterByStudentFields) {
+      const studentIds = await Student.find(studentFilter).select('_id');
+      query.studentId = { $in: studentIds.map(s => s._id) };
+    }
+
+    const logs = await Attendance.find(query)
+      .populate('studentId', 'name rollNumber branch section year email mobile parentName')
+      .populate('subjectId', 'name code')
+      .populate('teacherId', 'name email')
+      .sort({ date: -1, createdAt: -1 });
+
+    res.json(logs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/attendance - Save attendance (Manual, QR, Geolocation, Face Recognition)
+router.post('/', auth, authorizedRole, async (req, res) => {
+  const { 
+    studentId, 
+    studentIds, 
+    subjectId, 
+    status, 
+    date, 
+    location, 
+    verifiedBy, 
+    qrTimestamp 
+  } = req.body;
+  
   const targetDate = date || new Date().toISOString().split('T')[0];
 
-  if (!student_id || !status) {
-    return res.status(400).json({ msg: "Missing student_id or status" });
+  if (!status) {
+    return res.status(400).json({ msg: 'Status is required.' });
   }
 
-  // Check if attendance is already marked for the date
-  db.query(
-    "SELECT * FROM attendance WHERE student_id=? AND date=?",
-    [student_id, targetDate],
-    (err, results) => {
-      if (err) return res.status(500).json({ error: err.message });
-      if (results.length > 0) {
-        // Update existing attendance
-        db.query(
-          "UPDATE attendance SET status=? WHERE student_id=? AND date=?",
-          [status, student_id, targetDate],
-          () => res.json({ msg: "Attendance updated" })
-        );
-      } else {
-        // Insert new attendance
-        db.query(
-          "INSERT INTO attendance (student_id, date, status) VALUES (?, ?, ?)",
-          [student_id, targetDate, status],
-          () => res.json({ msg: "Attendance marked" })
-        );
+  try {
+    const teacherId = req.user.role === 'student' ? req.body.teacherId || null : req.user.id;
+
+    // 1. Validate time-limited QR codes (if QR scan is used)
+    if (verifiedBy === 'QR Code Scan' && qrTimestamp) {
+      const now = Date.now();
+      const difference = Math.abs(now - parseInt(qrTimestamp));
+      if (difference > 60 * 1000) { // 60 seconds QR expiration limit
+        return res.status(400).json({ msg: 'QR code expired. Please scan a fresh code.' });
       }
     }
-  );
-});
 
-// Get all students (Faculty Only)
-router.get("/students", auth, facultyOnly, (req, res) => {
-  db.query(
-    "SELECT id, name, student_id FROM students WHERE role='student'",
-    (err, data) => {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json(data);
+    // 2. Geolocation check (if coordinates are provided)
+    if (location && location.latitude && location.longitude) {
+      // Default Campus center: lat 17.4063, lng 78.4691, radius 200m
+      let campusLat = 17.4063;
+      let campusLng = 78.4691;
+      let allowedRadius = 200;
+
+      const settings = await Settings.findOne();
+      if (settings && settings.locationBoundary) {
+        campusLat = settings.locationBoundary.latitude || campusLat;
+        campusLng = settings.locationBoundary.longitude || campusLng;
+        allowedRadius = settings.locationBoundary.radius || allowedRadius;
+      }
+
+      const distance = getDistanceInMeters(
+        location.latitude, 
+        location.longitude, 
+        campusLat, 
+        campusLng
+      );
+
+      if (distance > allowedRadius) {
+        return res.status(400).json({ 
+          msg: `Outside Campus Boundary! You are ${Math.round(distance)}m away from campus. Attendance denied.` 
+        });
+      }
     }
-  );
-});
 
-// Get all attendance records (Faculty)
-router.get("/all", auth, facultyOnly, (req, res) => {
-  const { date } = req.query;
-  let query = "SELECT a.*, s.name, s.student_id FROM attendance a JOIN students s ON a.student_id = s.id";
-  let params = [];
-  if (date) {
-    query += " WHERE a.date=?";
-    params.push(date);
+    // Handle Bulk Mark (Faculty only)
+    if (studentIds && Array.isArray(studentIds)) {
+      if (req.user.role === 'student') {
+        return res.status(403).json({ msg: 'Access denied: Students cannot perform bulk marking.' });
+      }
+      const operations = studentIds.map(sid => ({
+        updateOne: {
+          filter: { studentId: sid, subjectId: subjectId || null, date: targetDate },
+          update: { 
+            studentId: sid, 
+            subjectId: subjectId || null, 
+            date: targetDate, 
+            status, 
+            teacherId, 
+            verifiedBy: verifiedBy || 'Manual' 
+          },
+          upsert: true
+        }
+      }));
+
+      await Attendance.bulkWrite(operations);
+
+      await new AuditLog({
+        action: 'ATTENDANCE_BULK_SAVE',
+        user: req.user.id,
+        ipAddress: req.ip,
+        details: `Bulk marked ${studentIds.length} students as ${status} for subject ID: ${subjectId}`
+      }).save();
+
+      return res.json({ msg: `Bulk attendance marked for ${studentIds.length} students.` });
+    }
+
+    // Handle Single Mark
+    const finalStudentId = studentId || req.user.associatedId;
+    if (!finalStudentId) {
+      return res.status(400).json({ msg: 'Please supply studentId.' });
+    }
+
+    const record = await Attendance.findOneAndUpdate(
+      { studentId: finalStudentId, subjectId: subjectId || null, date: targetDate },
+      { 
+        studentId: finalStudentId, 
+        subjectId: subjectId || null, 
+        date: targetDate, 
+        status, 
+        teacherId, 
+        location: location || { latitude: null, longitude: null }, 
+        verifiedBy: verifiedBy || 'Manual' 
+      },
+      { upsert: true, new: true, runValidators: true }
+    );
+
+    // Audit Log for single marking
+    await new AuditLog({
+      action: 'ATTENDANCE_MARK',
+      user: req.user.id,
+      ipAddress: req.ip,
+      details: `Student marked: ${finalStudentId} as ${status}. Verification: ${verifiedBy || 'Manual'}`
+    }).save();
+
+    res.json({ msg: 'Attendance logged successfully', record });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
-  query += " ORDER BY a.date DESC";
-
-  db.query(query, params, (err, data) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(data);
-  });
 });
 
-// Get absentees (Faculty)
-router.get("/absentees", auth, facultyOnly, (req, res) => {
-  const date = req.query.date || new Date().toISOString().split('T')[0];
-  db.query(
-    "SELECT a.*, s.name, s.student_id FROM attendance a JOIN students s ON a.student_id = s.id WHERE a.date=? AND a.status='Absent'",
-    [date],
-    (err, data) => {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json(data);
-    }
-  );
-});
+// PUT /api/attendance/:id - Update record
+router.put('/:id', auth, async (req, res) => {
+  const { status, date } = req.body;
+  try {
+    const record = await Attendance.findById(req.params.id);
+    if (!record) return res.status(404).json({ msg: 'Record not found.' });
 
-// Get student's own attendance (Student)
-router.get("/", auth, (req, res) => {
-  db.query(
-    "SELECT * FROM attendance WHERE student_id=? ORDER BY date DESC",
-    [req.user.id],
-    (err, data) => {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json(data);
-    }
-  );
-});
+    if (status) record.status = status;
+    if (date) record.date = date;
+    record.teacherId = req.user.id;
 
-// Get student's attendance stats (Student)
-router.get("/stats", auth, (req, res) => {
-  db.query(
-    "SELECT COUNT(*) as total, SUM(CASE WHEN status='Present' THEN 1 ELSE 0 END) as present FROM attendance WHERE student_id=?",
-    [req.user.id],
-    (err, result) => {
-      if (err) return res.status(500).json({ error: err.message });
-      const stats = result[0];
-      const percentage = stats.total > 0 ? (stats.present / stats.total) * 100 : 0;
-      res.json({ total: stats.total, present: stats.present, percentage: percentage.toFixed(2) });
-    }
-  );
-});
+    await record.save();
 
-// Get attendance stats per student (Faculty)
-router.get("/stats/all", auth, facultyOnly, (req, res) => {
-  const { date, from, to } = req.query;
-  let joinCond = "ON a.student_id = s.id";
-  const params = [];
+    await new AuditLog({
+      action: 'ATTENDANCE_EDIT',
+      user: req.user.id,
+      ipAddress: req.ip,
+      details: `Edited record ID: ${record._id}. Status set to ${record.status}`
+    }).save();
 
-  if (from && to) {
-    joinCond = "ON a.student_id = s.id AND a.date BETWEEN ? AND ?";
-    params.push(from, to);
-  } else if (date) {
-    joinCond = "ON a.student_id = s.id AND a.date = ?";
-    params.push(date);
+    res.json({ msg: 'Record updated', record });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
+});
 
-  const sql = `SELECT
-    s.id,
-    s.name,
-    s.student_id,
-    COALESCE(SUM(CASE WHEN a.status='Present' THEN 1 ELSE 0 END), 0) AS present,
-    COALESCE(SUM(CASE WHEN a.status='Absent' THEN 1 ELSE 0 END), 0) AS absent,
-    COALESCE(COUNT(a.id), 0) AS total,
-    CASE WHEN COUNT(a.id)=0 THEN 0
-         ELSE ROUND((SUM(CASE WHEN a.status='Present' THEN 1 ELSE 0 END) * 100.0) / COUNT(a.id), 2)
-    END AS percentage
-  FROM students s
-  LEFT JOIN attendance a ${joinCond}
-  WHERE s.role = 'student'
-  GROUP BY s.id, s.name, s.student_id
-  ORDER BY percentage DESC`;
+// DELETE /api/attendance/:id - Delete record
+router.delete('/:id', auth, async (req, res) => {
+  try {
+    const record = await Attendance.findById(req.params.id);
+    if (!record) return res.status(404).json({ msg: 'Record not found.' });
 
-  db.query(sql, params, (err, data) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(data);
-  });
+    await Attendance.findByIdAndDelete(req.params.id);
+
+    await new AuditLog({
+      action: 'ATTENDANCE_DELETE',
+      user: req.user.id,
+      ipAddress: req.ip,
+      details: `Deleted record ID: ${record._id}`
+    }).save();
+
+    res.json({ msg: 'Record deleted.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;
