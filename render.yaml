@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: student-backend
+    env: node
+    branch: main
+    rootDirectory: backend
+    buildCommand: npm install
+    startCommand: npm start
+    autoDeploy: true
+    plan: free
+    envVars:
+      - key: USE_SQLITE
+        value: "true"
