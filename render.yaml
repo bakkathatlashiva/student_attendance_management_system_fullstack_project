@@ -3,7 +3,7 @@ services:
     name: student-backend
     env: node
     branch: main
-    rootDirectory: backend
+    root: backend
     buildCommand: npm install
     startCommand: npm start
     autoDeploy: true
